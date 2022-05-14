@@ -38,7 +38,7 @@ This project is an attempt to translate the game into C in order to increase its
 
 ### On windows, you will need
 * MSYS2 installed
-* mingw-w64-x86_64-gcc installed through MSYS2
+* `mingw-w64-x86_64-gcc` and `mingw-w64-x86_64-SDL2` installed through MSYS2
 
 ## Build instructions
 

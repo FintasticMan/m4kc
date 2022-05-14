@@ -20,7 +20,8 @@ FLAGS_SMALL="-Os -g0 -fno-stack-protector -fno-unwind-tables \
 -fno-asynchronous-unwind-tables -Dsmall"
 FLAGS_WARN="-Wall -Wextra"
 FLAGS_DEBUG="-g"
-FLAGS_LIBS="-L/usr/local/lib -lSDL2 -lm"
+FLAGS_INCLUDE="$(sdl2-config --cflags)"
+FLAGS_LIBS="$(sdl2-config --libs)"
 
 INSTALL_LOCATION="/usr/local"
 
@@ -28,18 +29,16 @@ INSTALL_LOCATION="/usr/local"
 
 if [ ! -z "$MSYSTEM" ]; then
   PLATFORM="win64"
-
-  FLAGS_INCLUDE="-mwindows -Iwin\SDL2\include"
-  FLAGS_LIBS="-mwindows -Lwin\SDL2\lib -lmingw32 -lSDL2main -lSDL2"
   CC="gcc"
-  
+
   OBJ_PATH="win/o"
   OUT_PATH="win/bin"
-  
+
   SMALL_PATH="$OUT_PATH/m4kc.exe"
   DEBUG_PATH="$OUT_PATH/m4kc-debug.exe"
   GZEXE_CMD=":"
-  ZIP_FILES="$SMALL_PATH $OUT_PATH/SDL2.dll"
+else
+  FLAGS_LIBS="$FLAGS_LIBS -lm"
 fi
 
 ZIP_PATH="$RELEASE_PATH/M4KC-$VERSION-$PLATFORM.zip"
@@ -47,7 +46,6 @@ ZIP_PATH="$RELEASE_PATH/M4KC-$VERSION-$PLATFORM.zip"
 # build a single module from src
 
 buildModule () {
-  mkdir -p "$OBJ_PATH"
   mkdir -p "$OBJ_PATH/small"
   mkdir -p "$OBJ_PATH/debug"
 
@@ -61,17 +59,17 @@ buildModule () {
   else flags="$flags $FLAGS_DEBUG"
        modOut="$OBJ_PATH/debug/$1.o"
   fi
-  
+
   if [ ! -f "$modIn" ]; then
     echo "!!! module $1 does not exist, skipping" >&2; return
   fi
-  
-  if [ "$modOut" -nt "$modIn" ] && [ "$modOut" -nt "$modHead" ]; then
+
+  if [ -n "$(find "$modOut" -newer "$modIn" 2> /dev/null)" ] && [ -n "$(find "$modOut" -newer "$modHead" 2> /dev/null)" ]; then
     echo "(i) skipping module $1, already built"; return
   fi
-  
+
   echo "... building module $1: $1.c ---> $1.o"
-  
+
   $CC "$modIn" -o "$modOut" $flags && echo ".// built module $1" \
   || echo "ERR could not build module $1" >&2
 }
@@ -80,15 +78,15 @@ buildModule () {
 
 buildAll () {
   mkdir -p "$OUT_PATH"
-  
+
   echo "... building all modules"
 
   for module in $SRC_PATH/*.c; do
-    buildModule $(basename "${module%.*}") "$1"
+    buildModule "$(basename "${module%.*}")" "$1"
   done
 
   echo "... building entire executable"
-  
+
   flags="$FLAGS_LIBS $FLAGS_WARN"
   if [ "$1" = "small" ]
   then flags="$flags $FLAGS_SMALL -s"
@@ -120,7 +118,7 @@ buildAll () {
       echo "ERR could not compress executable" >&2
     fi
   fi
-  
+
   # copy SDL2.dll on windows
   if [ ! -z "$MSYSTEM" ]; then
     cp "win/SDL2.dll" "$OUT_PATH/SDL2.dll"
@@ -136,24 +134,24 @@ clean () {
 
 # control script
 
-case $1 in
-  all)   buildAll $2    ;;
+case "$1" in
+  all)   buildAll "$2"  ;;
   small) buildAll small ;;
   "")    buildAll       ;;
 
   redo)
     clean
-    buildAll $2
+    buildAll "$2"
     ;;
-  
+
   clean)
     clean
     ;;
-    
+
   run)
     buildAll && "./$DEBUG_PATH"
     ;;
-    
+
   install)
     clean
     buildAll small                                                                                 \
@@ -166,13 +164,13 @@ case $1 in
     && install -m 755 "./$SMALL_PATH" "$INSTALL_LOCATION/games/m4kc"                               \
     && echo ".// installed"
     ;;
-    
+
   uninstall)
     rm "$INSTALL_LOCATION/m4kc"
     rm "$INSTALL_LOCATION/share/applications/m4kc.desktop"
     rm "$INSTALL_LOCATION/share/icons/hicolor/256x256/apps/m4kc.png"
     ;;
-    
+
   release)
     clean
     buildAll small
@@ -182,6 +180,6 @@ case $1 in
     zip $ZIP_PATH $ZIP_FILES -j
     echo ".// packaged"
     ;;
-    
-  *) buildModule $1 $2 ;;
+
+  *) buildModule "$1" "$2" ;;
 esac
